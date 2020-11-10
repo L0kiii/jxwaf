@@ -90,6 +90,16 @@ if not jxcheck_protection_result then
   ngx.log(ngx.ERR,jxcheck_protection_error)
 end
 
+local rule_engine_result,rule_engine_error = pcall(waf.rule_engine)
+if not rule_engine_result then
+  local waf_log = {}
+  waf_log['log_type'] = "error"
+  waf_log['protection_type'] = "rule_engine"
+  waf_log['protection_info'] = rule_engine_error
+  ngx.ctx.waf_log = waf_log
+  ngx.log(ngx.ERR,rule_engine_error)
+end
+
 local redirect_https_result,redirect_https_error = pcall(waf.redirect_https)
 if not redirect_https_result then
   local waf_log = {}

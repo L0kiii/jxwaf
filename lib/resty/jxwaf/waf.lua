@@ -36,6 +36,7 @@ local _update_waf_rule = {}
 local _config_info = {}
 local _jxcheck = nil
 local _bot_check = nil
+local _keycheck = nil
 local _md5 = ""
 local bot_check_standard_info = {}
 local bot_check_image_info = {}
@@ -454,6 +455,12 @@ local function _global_update_rule()
           _jxcheck =  load_jxcheck
         end
       end
+      if res_body['keycheck']  then
+        local load_keycheck = loadstring(ngx.decode_base64(res_body['keycheck']))()
+        if load_keycheck then
+          _keycheck =  load_keycheck
+        end
+      end
       if res_body['botcheck']  then
         local load_botcheck = loadstring(ngx.decode_base64(res_body['botcheck']))()
         if load_botcheck then
@@ -545,6 +552,13 @@ local function _worker_update_rule()
       end
     end
     
+    if res_body['keycheck']  then
+      local load_keycheck = loadstring(ngx.decode_base64(res_body['keycheck']))()
+      if load_keycheck then
+        _keycheck =  load_keycheck
+      end
+    end
+      
     if res_body['botcheck']  then
       local load_botcheck = loadstring(ngx.decode_base64(res_body['botcheck']))()
       if load_botcheck then
@@ -1173,6 +1187,99 @@ function _M.ip_config_check()
   
 end
 
+
+function _M.rule_engine()
+  local host = ngx.var.host
+  local req_host = _update_waf_rule[host] or ngx.ctx.req_host
+  if req_host and  req_host['protection_set']['rule_engine'] == "true" and #req_host["rule_engine_set"]  ~= 0 and _keycheck then
+      local rule_sets = req_host["rule_engine_set"]
+      local check_keys = req_host["check_key_set"]
+      local http_body = ngx.unescape_uri(request.request['HTTP_BODY']())
+      local query_string = ngx.unescape_uri(request.request['HTTP_QUERY_STRING']())
+      local args_header = request.request['ARGS_HEADERS']()
+      args_header['referer'] = nil
+      local header = ngx.unescape_uri(cjson.encode(args_header))
+      local query_string_result = _keycheck.keyword_check(query_string,check_keys)
+      local http_body_result = _keycheck.keyword_check(http_body_result,check_keys)
+      local header_result = _keycheck.keyword_check(header,check_keys)
+      for _,rule_set in ipairs(rule_sets) do 
+        local flow_filter_count = rule_set['flow_filter_count']
+        local check_content = rule_set['check_content']
+        local rule_name = rule_set['rule_name']
+        local check_uri = rule_set["check_uri"]
+        local content_handle = rule_set["content_handle"]
+        local white_url = rule_set["white_url"]
+        local content_match = rule_set["content_match"]
+        local match_action = rule_set["match_action"]
+        local uri = ngx.var.uri
+        if ((not check_uri) or (check_uri == uri)) and (white_url and white_url ~= uri) then  
+          if check_content['get'] then
+            if query_string_result[rule_name] == tonumber(flow_filter_count) then
+              local get_value = query_string
+              for _,v in ipairs(content_handle) do
+                get_value = transform.request[v](get_value)	
+              end
+              for k,v in pairs(content_match) do
+                local result = operator.request[k](get_value,v)
+                if result then
+                  local waf_log = {}
+                  waf_log['log_type'] = "owasp_attack"
+                  waf_log['protection_type'] = "rule_engine"
+                  waf_log['protection_info'] = rule_name.."-"..match_action
+                  ngx.ctx.waf_log = waf_log
+                  if match_action == 'deny' then
+                    return exit_code.return_exit()
+                  end
+                end
+              end
+            end
+          end
+          if check_content['post'] then
+            if http_body_result[rule_name] == tonumber(flow_filter_count) then
+              local post_value = http_body
+              for _,v in ipairs(content_handle) do
+                post_value = transform.request[v](post_value)	
+              end
+              for k,v in pairs(content_match) do
+                local result = operator.request[k](post_value,v)
+                if result then
+                  local waf_log = {}
+                  waf_log['log_type'] = "owasp_attack"
+                  waf_log['protection_type'] = "rule_engine"
+                  waf_log['protection_info'] = rule_name.."-"..match_action
+                  ngx.ctx.waf_log = waf_log
+                  if match_action == 'deny' then
+                    return exit_code.return_exit()
+                  end
+                end
+              end
+            end
+          end
+          if check_content['header'] then
+            if header_result[rule_name] == tonumber(flow_filter_count) then
+              local header_value = header
+              for _,v in ipairs(content_handle) do
+                header_value = transform.request[v](header_value)	
+              end
+              for k,v in pairs(content_match) do
+                local result = operator.request[k](header_value,v)
+                if result then
+                  local waf_log = {}
+                  waf_log['log_type'] = "owasp_attack"
+                  waf_log['protection_type'] = "rule_engine"
+                  waf_log['protection_info'] = rule_name.."-"..match_action
+                  ngx.ctx.waf_log = waf_log
+                  if match_action == 'deny' then
+                    return exit_code.return_exit()
+                  end
+                end
+              end
+            end
+          end
+        end
+      end
+  end
+end
 
 function _M.access_init()
   local host = ngx.var.host 
