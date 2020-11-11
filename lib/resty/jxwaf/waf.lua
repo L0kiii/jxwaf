@@ -1212,9 +1212,21 @@ function _M.rule_engine()
         local content_match = rule_set["content_match"]
         local match_action = rule_set["match_action"]
         local uri = ngx.var.uri
-        if ((not check_uri) or (check_uri == uri)) and (white_url and white_url ~= uri) then  
+        local white_url_check_result = true
+        if white_url then
+          for _,v in ipairs(white_url) do
+            if uri == v then
+              white_url_check_result = nil 
+            end
+          end
+        end
+        if ((not check_uri) or (check_uri == uri)) and white_url_check_result then  
           if check_content['get'] then
-            if query_string_result[rule_name] == tonumber(flow_filter_count) then
+            local query_string_result_count = 0
+            if query_string_result[rule_name] then
+              query_string_result_count = query_string_result[rule_name]
+            end
+            if query_string_result_count == tonumber(flow_filter_count) then
               local get_value = query_string
               for _,v in ipairs(content_handle) do
                 get_value = transform.request[v](get_value)	
@@ -1240,43 +1252,61 @@ function _M.rule_engine()
             end
           end
           if check_content['post'] then
-            if http_body_result[rule_name] == tonumber(flow_filter_count) then
+            local http_body_result_count = 0
+            if http_body_result[rule_name] then
+              http_body_result_count = http_body_result[rule_name]
+            end
+            if http_body_result_count == tonumber(flow_filter_count) then
               local post_value = http_body
               for _,v in ipairs(content_handle) do
                 post_value = transform.request[v](post_value)	
               end
+              local match_result = true
               for k,v in pairs(content_match) do
                 local result = operator.request[k](post_value,v)
-                if result then
-                  local waf_log = {}
-                  waf_log['log_type'] = "owasp_attack"
-                  waf_log['protection_type'] = "rule_engine"
-                  waf_log['protection_info'] = rule_name.."-"..match_action
-                  ngx.ctx.waf_log = waf_log
-                  if match_action == 'deny' then
-                    return exit_code.return_exit()
-                  end
+                if not result then
+                  match_result = nil
+                  break
+                end
+              end
+              if match_result then
+                local waf_log = {}
+                waf_log['log_type'] = "owasp_attack"
+                waf_log['protection_type'] = "rule_engine"
+                waf_log['protection_info'] = rule_name.."-"..match_action
+                ngx.ctx.waf_log = waf_log
+                if match_action == 'deny' then
+                  return exit_code.return_exit()
                 end
               end
             end
           end
           if check_content['header'] then
-            if header_result[rule_name] == tonumber(flow_filter_count) then
+            local header_result_count = 0
+            if header_result[rule_name] then
+              header_result_count = header_result[rule_name]
+            end
+            if header_result_count == tonumber(flow_filter_count) then
               local header_value = header
               for _,v in ipairs(content_handle) do
                 header_value = transform.request[v](header_value)	
               end
+              local match_result = true
               for k,v in pairs(content_match) do
                 local result = operator.request[k](header_value,v)
-                if result then
-                  local waf_log = {}
-                  waf_log['log_type'] = "owasp_attack"
-                  waf_log['protection_type'] = "rule_engine"
-                  waf_log['protection_info'] = rule_name.."-"..match_action
-                  ngx.ctx.waf_log = waf_log
-                  if match_action == 'deny' then
-                    return exit_code.return_exit()
-                  end
+                if not result then
+                  match_result = nil
+                  break
+                end
+              end
+              if match_result then
+                local waf_log = {}
+                waf_log['log_type'] = "owasp_attack"
+                waf_log['protection_type'] = "rule_engine"
+                waf_log['protection_info'] = rule_name.."-"..match_action
+                ngx.ctx.waf_log = waf_log
+                if match_action == 'deny' then
+                  return exit_code.return_exit()
                 end
               end
             end
