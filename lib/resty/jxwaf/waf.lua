@@ -25,6 +25,7 @@ local string_lower = string.lower
 local process = require "ngx.process"
 local ngx_decode_base64 = ngx.decode_base64
 local aes = require "resty.aes"
+local shell = require "resty.shell"
 local _M = {}
 _M.version = "20200918"
 
@@ -50,6 +51,7 @@ local _auto_update_period = "60"
 local _waf_node_monitor = "true"
 local _waf_node_monitor_period = "60"
 
+--[[
 local function _process_rule()
   for k,v in pairs(_update_waf_rule) do
     if v['domain_set'] and (v['domain_set']['enc_https'] == "true") then
@@ -58,6 +60,7 @@ local function _process_rule()
     end
   end
 end
+--]]
 
 local function _sort_rules(a,b)
     if a.rule_level == b.rule_level then
@@ -137,7 +140,7 @@ local function _cc_black_ip_stat(req_host,check_mode)
         black_ip_info['protection_info'] = block_mode
         black_ip_info['protecion_handle'] = block_time
         if (block_mode == 'block' or block_mode == 'network_layer_block') and tonumber(block_time) > 0 then
-          attack_ip_check:set(ip_addr,cjson.encode(black_ip_info),tonumber(handle))
+          attack_ip_check:set(ip_addr,cjson.encode(black_ip_info),tonumber(block_time))
         end
         if (block_mode == 'block' or block_mode == 'network_layer_block') and tonumber(block_time) == 0 then
           attack_ip_check:set(ip_addr,cjson.encode(black_ip_info))
@@ -595,7 +598,7 @@ local function _worker_update_rule()
       _log_conf = res_body['log_conf']
     end
     
-    _process_rule()
+    --_process_rule()
     _md5 = res_body['md5']
     ngx.log(ngx.ALERT,"worker config info md5 is ".._md5..",update config info success")
   end
@@ -610,7 +613,7 @@ function _M.init_worker()
         local monitor_ok,monitor_err = ngx.timer.at(0,_momitor_update)
         if not monitor_ok then
           if monitor_err ~= "process exiting" then
-            ngx.log(ngx.ERR, "failed to create the init timer: ", init_err)
+            ngx.log(ngx.ERR, "failed to create the init timer: ", monitor_err)
           end
         end
       end
@@ -1200,7 +1203,7 @@ function _M.rule_engine()
       args_header['referer'] = nil
       local header = ngx.unescape_uri(cjson.encode(args_header))
       local query_string_result = _keycheck.keyword_check(query_string,check_keys)
-      local http_body_result = _keycheck.keyword_check(http_body_result,check_keys)
+      local http_body_result = _keycheck.keyword_check(http_body,check_keys)
       local header_result = _keycheck.keyword_check(header,check_keys)
       for _,rule_set in ipairs(rule_sets) do 
         local flow_filter_count = rule_set['flow_filter_count']
