@@ -1219,17 +1219,22 @@ function _M.rule_engine()
               for _,v in ipairs(content_handle) do
                 get_value = transform.request[v](get_value)	
               end
+              local match_result = true
               for k,v in pairs(content_match) do
                 local result = operator.request[k](get_value,v)
-                if result then
-                  local waf_log = {}
-                  waf_log['log_type'] = "owasp_attack"
-                  waf_log['protection_type'] = "rule_engine"
-                  waf_log['protection_info'] = rule_name.."-"..match_action
-                  ngx.ctx.waf_log = waf_log
-                  if match_action == 'deny' then
-                    return exit_code.return_exit()
-                  end
+                if not result then
+                  match_result = nil
+                  break
+                end
+              end
+              if match_result then
+                local waf_log = {}
+                waf_log['log_type'] = "owasp_attack"
+                waf_log['protection_type'] = "rule_engine"
+                waf_log['protection_info'] = rule_name.."-"..match_action
+                ngx.ctx.waf_log = waf_log
+                if match_action == 'deny' then
+                  return exit_code.return_exit()
                 end
               end
             end
