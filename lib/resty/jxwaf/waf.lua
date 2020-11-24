@@ -1322,12 +1322,12 @@ end
 function _M.access_init()
   local host = ngx.var.host 
   local req_host = _update_waf_rule[host] or ngx.ctx.req_host
-  local xff = ngx.req.get_headers()['X-Forwarded-For'] or ngx.req.get_headers()['X-REAL-IP']
+  local xff =  ngx.req.get_headers()['X-REAL-IP'] or ngx.req.get_headers()['X-Forwarded-For']
   if xff and req_host['domain_set']['proxy'] == "true" then
     local xff_result
     local iplist = iputils.parse_cidrs(req_host['domain_set']['proxy_ip'])
     if iputils.ip_in_cidrs(ngx.var.remote_addr, iplist) then
-      local ip = ngx.re.match(xff,[=[^\d{1,3}+\.\d{1,3}+\.\d{1,3}+\.\d{1,3}+]=],'oj')[0] or ngx.req.get_headers()['X-REAL-IP']
+      local ip = ngx.req.get_headers()['X-REAL-IP'] or ngx.re.match(xff,[=[^\d{1,3}+\.\d{1,3}+\.\d{1,3}+\.\d{1,3}+]=],'oj')[0] 
       if ip and #ip > 6 then
         xff_result = ip 
       else
